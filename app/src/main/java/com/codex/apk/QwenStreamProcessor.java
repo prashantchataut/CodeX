@@ -19,6 +19,12 @@ import java.util.Set;
 import okhttp3.Response;
 
 public class QwenStreamProcessor {
+
+    @FunctionalInterface
+    public interface PartialUpdateCallback {
+        void onUpdate(String partialResult, boolean isThinking);
+    }
+
     private static final String TAG = "QwenStreamProcessor";
 
     private final AIAssistant.AIActionListener actionListener;
@@ -244,26 +250,31 @@ public class QwenStreamProcessor {
         }
 
         if (jsonToParse != null) {
-            try {
-                QwenResponseParser.ParsedResponse parsed = QwenResponseParser.parseResponse(jsonToParse);
-                if (parsed != null && parsed.isValid) {
-                    if ("plan".equals(parsed.action)) {
-                        List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
-                        actionListener.onAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), planSteps, model.getDisplayName());
-                    } else if (parsed.action != null && parsed.action.contains("file")) {
-                        List<ChatMessage.FileActionDetail> details = QwenResponseParser.toFileActionDetails(parsed);
-                        enrichFileActionDetails(details);
-                        notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), details, thinkingContent, webSources);
+            QwenResponseParser.parseResponseAsync(jsonToParse, rawResponse, new QwenResponseParser.ParseResultListener() {
+                @Override
+                public void onParseSuccess(QwenResponseParser.ParsedResponse parsed) {
+                    if (parsed != null && parsed.isValid) {
+                        if ("plan".equals(parsed.action)) {
+                            List<ChatMessage.PlanStep> planSteps = QwenResponseParser.toPlanSteps(parsed);
+                            actionListener.onAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), planSteps, model.getDisplayName());
+                        } else if (parsed.action != null && parsed.action.contains("file")) {
+                            List<ChatMessage.FileActionDetail> details = QwenResponseParser.toFileActionDetails(parsed);
+                            enrichFileActionDetails(details);
+                            notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), details, thinkingContent, webSources);
+                        } else {
+                            notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
+                        }
                     } else {
-                        notifyAiActionsProcessed(rawResponse, parsed.explanation, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
+                        notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
                     }
-                } else {
+                }
+
+                @Override
+                public void onParseFailed() {
+                    Log.e(TAG, "Failed to parse extracted JSON, treating as text.");
                     notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to parse extracted JSON, treating as text.", e);
-                notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
-            }
+            });
         } else {
             notifyAiActionsProcessed(rawResponse, finalContent, new ArrayList<>(), new ArrayList<>(), thinkingContent, webSources);
         }
@@ -423,6 +434,41 @@ public class QwenStreamProcessor {
         } else {
             String fallback = com.codex.apk.util.ResponseUtils.buildExplanationWithThinking(explanation, thinking);
             actionListener.onAiActionsProcessed(rawAiResponseJson, fallback, suggestions, fileActions, model.getDisplayName());
+        }
+    }
+
+    public static boolean isErrorChunk(JsonObject chunk) {
+        // Simple check for now, can be expanded
+        return chunk.has("error");
+    }
+
+    public static void processChunk(JsonObject data, QwenConversationState state, StringBuilder finalText, PartialUpdateCallback callback, AIAssistant.AIActionListener listener) {
+        try {
+            if (data.has("response.created")) {
+                JsonObject created = data.getAsJsonObject("response.created");
+                if (created.has("chat_id")) state.setConversationId(created.get("chat_id").getAsString());
+                if (created.has("response_id")) state.setLastParentId(created.get("response_id").getAsString());
+                if (listener != null) listener.onQwenConversationStateUpdated(state);
+                return;
+            }
+
+            if (data.has("choices")) {
+                JsonArray choices = data.getAsJsonArray("choices");
+                if (choices.size() > 0) {
+                    JsonObject choice = choices.get(0).getAsJsonObject();
+                    if (choice.has("delta")) {
+                        JsonObject delta = choice.getAsJsonObject("delta");
+                        String content = delta.has("content") ? delta.get("content").getAsString() : "";
+                        String phase = delta.has("phase") ? delta.get("phase").getAsString() : "answer";
+                        finalText.append(content);
+                        if (callback != null) {
+                            callback.onUpdate(finalText.toString(), "think".equals(phase));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error processing stream chunk in QwenStreamProcessor", e);
         }
     }
 }

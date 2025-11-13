@@ -7,12 +7,23 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import android.os.Handler;
+import android.os.Looper;
 
 /**
  * Parser for handling JSON responses from Qwen models, especially for file operations.
  */
 public class QwenResponseParser {
     private static final String TAG = "QwenResponseParser";
+    private static final ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    public interface ParseResultListener {
+        void onParseSuccess(ParsedResponse response);
+        void onParseFailed();
+    }
 
     /**
      * Represents a parsed plan step
@@ -88,11 +99,12 @@ public class QwenResponseParser {
      * Represents a complete parsed JSON response
      */
     public static class ParsedResponse {
-        public final String action; // plan | file_operation | json_response | single file op
-        public final List<FileOperation> operations;
-        public final List<PlanStep> planSteps;
-        public final String explanation;
-        public final boolean isValid;
+        public String action; // plan | file_operation | json_response | single file op
+        public List<FileOperation> operations;
+        public List<PlanStep> planSteps;
+        public String explanation;
+        public boolean isValid;
+        public String rawResponse;
 
         public ParsedResponse(String action, List<FileOperation> operations, List<PlanStep> planSteps,
                               String explanation, boolean isValid) {
@@ -102,12 +114,33 @@ public class QwenResponseParser {
             this.explanation = explanation;
             this.isValid = isValid;
         }
+
+        public ParsedResponse() {
+            this.operations = new ArrayList<>();
+            this.planSteps = new ArrayList<>();
+        }
     }
 
     /**
      * Attempts to parse a JSON response string into a structured response object.
      * Returns null if the response is not valid JSON or doesn't match expected format.
      */
+    public static void parseResponseAsync(String jsonToParse, String rawSse, ParseResultListener listener) {
+        backgroundExecutor.execute(() -> {
+            try {
+                ParsedResponse response = parseResponse(jsonToParse);
+                if (response != null) {
+                    response.rawResponse = rawSse;
+                    mainHandler.post(() -> listener.onParseSuccess(response));
+                } else {
+                    mainHandler.post(listener::onParseFailed);
+                }
+            } catch (Exception e) {
+                mainHandler.post(listener::onParseFailed);
+            }
+        });
+    }
+
     public static ParsedResponse parseResponse(String responseText) {
         try {
             Log.d(TAG, "Parsing response: " + responseText.substring(0, Math.min(200, responseText.length())) + "...");
