@@ -54,168 +54,118 @@ public class ToolSpec {
     /* ------------------------------------------------------------
      * Convenience helpers: common file-system manipulation tools
      * ------------------------------------------------------------ */
-    public static java.util.List<ToolSpec> defaultFileTools() {
+    public static java.util.List<ToolSpec> stormyAgentTools() {
         java.util.List<ToolSpec> tools = new java.util.ArrayList<>();
 
-        // createFile
         tools.add(new ToolSpec(
-                "createFile",
-                "Create a new file with the provided content (UTF-8). The file will be created in the project workspace.",
+                "write_to_file",
+                "Create or overwrite a file with the provided UTF-8 content. Creates parent directories if needed.",
                 buildSchema(
                         new String[]{"path", "content"},
                         new String[]{"string", "string"},
-                        new String[]{"Relative path to the file to create", "Content to write to the file"}
+                        new String[]{"Relative path to the file", "Full file contents"}
                 )));
 
-        // updateFile
         tools.add(new ToolSpec(
-                "updateFile",
-                "Overwrite an existing file with new content. The file must exist in the project workspace.",
+                "replace_in_file",
+                "Perform a targeted replacement inside a file using a SEARCH/=======/REPLACE diff block.",
                 buildSchema(
-                        new String[]{"path", "content"},
+                        new String[]{"path", "diff"},
                         new String[]{"string", "string"},
-                        new String[]{"Relative path to the file to update", "New content to write to the file"}
+                        new String[]{"Relative path to the file", "Diff block formatted as SEARCH\\n=======\\nREPLACE"}
                 )));
 
-        // deleteFile
         tools.add(new ToolSpec(
-                "deleteFile",
-                "Delete a file or an empty directory from the project workspace.",
+                "read_file",
+                "Read the entire contents of a file (truncated for very large files).",
                 buildSchema(
                         new String[]{"path"},
                         new String[]{"string"},
-                        new String[]{"Relative path to the file or directory to delete"}
+                        new String[]{"Relative path to the file"}
                 )));
 
-        // renameFile
         tools.add(new ToolSpec(
-                "renameFile",
-                "Rename or move a file or directory within the project workspace.",
+                "list_files",
+                "List files and folders inside a directory with optional recursion.",
                 buildSchema(
-                        new String[]{"oldPath", "newPath"},
-                        new String[]{"string", "string"},
-                        new String[]{"Current path of the file or directory", "New path for the file or directory"}
-                )));
-
-        // readFile
-        tools.add(new ToolSpec(
-                "readFile",
-                "Read the contents of a file from the project workspace.",
-                buildSchema(
-                        new String[]{"path"},
-                        new String[]{"string"},
-                        new String[]{"Relative path to the file to read"}
-                )));
-
-        // listFiles
-        tools.add(new ToolSpec(
-                "listFiles",
-                "List files and directories in a directory within the project workspace.",
-                buildSchema(
-                        new String[]{"path"},
-                        new String[]{"string"},
-                        new String[]{"Relative path to the directory to list (use '.' for root)"}
-                )));
-
-        // searchAndReplace
-        tools.add(new ToolSpec(
-                "searchAndReplace",
-                "Search a file by pattern and replace occurrences. Supports simple regex.",
-                buildSchema(
-                        new String[]{"path", "searchPattern", "replaceWith"},
-                        new String[]{"string", "string", "string"},
-                        new String[]{"Relative path to the file", "Regex or plain text to search", "Replacement text"}
-                )));
-
-        // patchFile
-        tools.add(new ToolSpec(
-                "patchFile",
-                "Apply a unified diff patch to a file in the project workspace.",
-                buildSchema(
-                        new String[]{"path", "diffPatch"},
-                        new String[]{"string", "string"},
-                        new String[]{"Relative path to the file", "Unified diff patch content"}
-                )));
-
-        // listProjectTree
-        tools.add(new ToolSpec(
-                "listProjectTree",
-                "List the project tree from a path with depth and entry limits.",
-                buildSchema(
-                        new String[]{"path", "depth", "maxEntries"},
-                        new String[]{"string", "integer", "integer"},
-                        new String[]{"Relative path ('.' for root)", "Max depth (0-5)", "Max entries (10-1000)"}
-                )));
-
-        // searchInProject
-        tools.add(new ToolSpec(
-                "searchInProject",
-                "Search project files for a query. Supports regex when enabled.",
-                buildSchema(
-                        new String[]{"query", "maxResults", "regex"},
-                        new String[]{"string", "integer", "boolean"},
-                        new String[]{"Search query or regex pattern", "Maximum number of results", "Treat query as regex"}
-                )));
-
-        // fixLint
-        tools.add(new ToolSpec(
-                "fixLint",
-                "Apply simple auto-fixes for common HTML/CSS/JS lint issues (adds missing doctype, alt/type, balances brackets).",
-                buildSchema(
-                        new String[]{"path", "aggressive"},
+                        new String[]{"path", "recursive"},
                         new String[]{"string", "boolean"},
-                        new String[]{"Relative path to the file", "Allow more aggressive fixes (may alter formatting)"}
+                        new String[]{"Relative directory path (use '.' for project root)", "Whether to recurse"}
+                )));
+
+        tools.add(new ToolSpec(
+                "rename_file",
+                "Rename or move a file/folder within the project workspace.",
+                buildSchema(
+                        new String[]{"old_path", "new_path"},
+                        new String[]{"string", "string"},
+                        new String[]{"Existing relative path", "Destination relative path"}
+                )));
+
+        tools.add(new ToolSpec(
+                "delete_file",
+                "Delete a file or directory (recursively) inside the workspace.",
+                buildSchema(
+                        new String[]{"path"},
+                        new String[]{"string"},
+                        new String[]{"Relative path to delete"}
+                )));
+
+        tools.add(new ToolSpec(
+                "copy_file",
+                "Copy a file or directory to a new location within the workspace.",
+                buildSchema(
+                        new String[]{"source_path", "destination_path"},
+                        new String[]{"string", "string"},
+                        new String[]{"Source relative path", "Destination relative path"}
+                )));
+
+        tools.add(new ToolSpec(
+                "move_file",
+                "Move a file or directory to a new location (copy + delete).",
+                buildSchema(
+                        new String[]{"source_path", "destination_path"},
+                        new String[]{"string", "string"},
+                        new String[]{"Source relative path", "Destination relative path"}
+                )));
+
+        tools.add(new ToolSpec(
+                "search_files",
+                "Search files using a Java regex pattern and return context-rich matches.",
+                buildSchema(
+                        new String[]{"directory", "regex_pattern"},
+                        new String[]{"string", "string"},
+                        new String[]{"Relative directory to scan", "Regex pattern to evaluate"}
+                )));
+
+        tools.add(new ToolSpec(
+                "list_code_definition_names",
+                "Enumerate class/function/component names inside a directory for quick discovery.",
+                buildSchema(
+                        new String[]{"directory"},
+                        new String[]{"string"},
+                        new String[]{"Relative directory containing source files"}
+                )));
+
+        tools.add(new ToolSpec(
+                "ask_followup_question",
+                "Pause execution and ask the user a clarifying question.",
+                buildSchema(
+                        new String[]{"question"},
+                        new String[]{"string"},
+                        new String[]{"Question to show the user"}
+                )));
+
+        tools.add(new ToolSpec(
+                "attempt_completion",
+                "Signal that the task is believed to be complete and provide a summary.",
+                buildSchema(
+                        new String[]{"summary"},
+                        new String[]{"string"},
+                        new String[]{"Concise summary of what was accomplished"}
                 )));
 
         return tools;
-    }
-
-    /**
-     * Optional: returns the default file tools plus network/content and grep utilities.
-     * This is opt-in so existing behavior remains unchanged unless callers choose it.
-     */
-    public static java.util.List<ToolSpec> defaultFileToolsPlusSearchNet() {
-        java.util.List<ToolSpec> tools = defaultFileTools();
-        tools.add(specReadUrlContent());
-        tools.add(specGrepSearch());
-        return tools;
-    }
-
-    /**
-     * Helper spec: readUrlContent
-     * Fetch static HTTP(S) content for reference (HTML/JSON/text). Avoids executing scripts.
-     */
-    public static ToolSpec specReadUrlContent() {
-        return new ToolSpec(
-                "readUrlContent",
-                "Fetch static content from an HTTP(S) URL for reference (HTML/JSON/text).",
-                buildSchema(
-                        new String[]{"url"},
-                        new String[]{"string"},
-                        new String[]{"Absolute HTTP(S) URL to read"}
-                )
-        );
-    }
-
-    /**
-     * Helper spec: grepSearch
-     * A powerful search across project files with optional regex and case-insensitive matching.
-     */
-    public static ToolSpec specGrepSearch() {
-        return new ToolSpec(
-                "grepSearch",
-                "Search files with a powerful grep. Supports regex and case-insensitive modes.",
-                buildSchema(
-                        new String[]{"query", "path", "isRegex", "caseInsensitive"},
-                        new String[]{"string", "string", "boolean", "boolean"},
-                        new String[]{
-                                "Search term or regex pattern",
-                                "Relative path (directory or file) to search within",
-                                "Treat query as regex",
-                                "Perform a case-insensitive search"
-                        }
-                )
-        );
     }
 
     /**
