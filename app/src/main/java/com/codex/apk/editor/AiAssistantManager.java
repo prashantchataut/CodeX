@@ -70,7 +70,7 @@ public class AiAssistantManager implements AIAssistant.AIActionListener, com.cod
         this.responseRenderer = new AiResponseRenderer();
 
         this.aiAssistant = new AIAssistant(activity, null, projectDir, projectName, executorService, this);
-        this.aiAssistant.setEnabledTools(com.codex.apk.ToolSpec.defaultFileToolsPlusSearchNet());
+        this.aiAssistant.setEnabledTools(com.codex.apk.ToolSpec.stormyAgentTools());
 
         // Model selection: prefer per-project last-used, else global default, else fallback
         SharedPreferences settingsPrefs = activity.getSharedPreferences("settings", Context.MODE_PRIVATE);
